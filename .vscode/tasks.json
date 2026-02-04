@@ -1,0 +1,200 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "GRBL: Build",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "all"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": {
+                "owner": "cpp",
+                "fileLocation": ["relative", "${workspaceFolder}"],
+                "pattern": {
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            }
+        },
+        {
+            "label": "GRBL: Clean",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "clean"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            }
+        },
+        {
+            "label": "GRBL: Clean and Build",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "clean",
+                "all"
+            ],
+            "group": "build",
+            "problemMatcher": {
+                "owner": "cpp",
+                "fileLocation": ["relative", "${workspaceFolder}"],
+                "pattern": {
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            }
+        },
+        {
+            "label": "GRBL: Upload (default port)",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "upload"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            }
+        },
+        {
+            "label": "GRBL: Upload (custom port)",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "upload",
+                "UPLOAD_PORT=${input:uploadPort}"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            }
+        },
+        {
+            "label": "GRBL: Build and Upload (default port)",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "all",
+                "upload"
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            }
+        },
+        {
+            "label": "GRBL: Build and Upload (custom port)",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "all",
+                "upload",
+                "UPLOAD_PORT=${input:uploadPort}"
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            }
+        },
+        {
+            "label": "GRBL: Show Memory Usage",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "size"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            }
+        },
+        {
+            "label": "GRBL: Help",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "help"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            }
+        }
+    ],
+    "inputs": [
+        {
+            "id": "uploadPort",
+            "type": "promptString",
+            "description": "Enter the upload port (e.g., /dev/ttyUSB0, /dev/ttyACM0, COM3)",
+            "default": "/dev/ttyUSB0"
+        }
+    ]
+}

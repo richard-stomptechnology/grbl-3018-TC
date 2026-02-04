@@ -1,0 +1,22 @@
+# Build artifacts
+build/
+*.o
+*.elf
+*.hex
+*.map
+*.lss
+*.eep
+*.bin
+
+# Editor and IDE files
+.vscode/settings.json
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary files
+*.tmp
+tmp/

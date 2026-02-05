@@ -173,9 +173,6 @@
 #define GC_PARSER_ARC_IS_CLOCKWISE      bit(2)
 #define GC_PARSER_PROBE_IS_AWAY         bit(3)
 #define GC_PARSER_PROBE_IS_NO_ERROR     bit(4)
-#define GC_PARSER_LASER_FORCE_SYNC      bit(5)
-#define GC_PARSER_LASER_DISABLE         bit(6)
-#define GC_PARSER_LASER_ISMOTION        bit(7)
 
 
 // NOTE: When this struct is zeroed, the above defines set the defaults for the system.

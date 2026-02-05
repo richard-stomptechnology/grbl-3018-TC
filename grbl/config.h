@@ -380,7 +380,7 @@
 // every buffer block junction, except for starting from rest and end of the buffer, which are always
 // zero. This value controls how fast the machine moves through junctions with no regard for acceleration
 // limits or angle between neighboring block line move directions. This is useful for machines that can't
-// tolerate the tool dwelling for a split second, i.e. 3d printers or laser cutters. If used, this value
+// tolerate the tool dwelling for a split second, i.e. 3d printers. If used, this value
 // should not be much greater than zero or to the minimum value necessary for the machine to work.
 #define MINIMUM_JUNCTION_SPEED 0.0 // (mm/min)
 
@@ -580,11 +580,6 @@
 // #define ENABLE_PARKING_OVERRIDE_CONTROL   // Default disabled. Uncomment to enable
 // #define DEACTIVATE_PARKING_UPON_INIT // Default disabled. Uncomment to enable.
 
-// This option will automatically disable the laser during a feed hold by invoking a spindle stop
-// override immediately after coming to a stop. However, this also means that the laser still may
-// be reenabled by disabling the spindle stop override, if needed. This is purely a safety feature
-// to ensure the laser doesn't inadvertently remain powered while at a stop and cause a fire.
-#define DISABLE_LASER_DURING_HOLD // Default enabled. Comment to disable.
 
 // This feature alters the spindle PWM/speed to a nonlinear output with a simple piecewise linear
 // curve. Useful for spindles that don't produce the right RPM from Grbl's standard spindle PWM 
@@ -636,7 +631,7 @@
 */
 // NOTE: This feature requires approximately 400 bytes of flash. Certain configurations can
 // run out of flash to fit on an Arduino 328p/Uno. Only X and Y axes are supported. Variable
-// spindle/laser mode IS supported, but only for one config option. Core XY, spindle direction
+// spindle mode IS supported, but only for one config option. Core XY, spindle direction
 // pin, and M7 mist coolant are disabled/not supported.
 // #define ENABLE_DUAL_AXIS	// Default disabled. Uncomment to enable.
 
@@ -657,7 +652,7 @@
 // Dual axis pin configuration currently supports two shields. Uncomment the shield you want,
 // and comment out the other one(s).
 // NOTE: Protoneer CNC Shield v3.51 has A.STP and A.DIR wired to pins A4 and A3 respectively.
-// The variable spindle (i.e. laser mode) build option works and may be enabled or disabled.
+// The variable spindle build option works and may be enabled or disabled.
 // Coolant pin A3 is moved to D13, replacing spindle direction.
 #define DUAL_AXIS_CONFIG_PROTONEER_V3_51    // Uncomment to select. Comment other configs.
 
@@ -667,7 +662,7 @@
 // enable pin now resides on A3, replacing coolant enable. Coolant enable is bumped over to
 // pin A4. Spindle enable is used far more and this pin setup helps facilitate users to 
 // integrate this feature without arguably too much work. 
-// Variable spindle (i.e. laser mode) does NOT work with this shield as configured. While
+// Variable spindle does NOT work with this shield as configured. While
 // variable spindle technically can work with this shield, it requires too many changes for
 // most user setups to accomodate. It would best be implemented by sharing all limit switches
 // on pins D9/D10 (as [X1,Z]/[X2,Y] or [X,Y2]/[Y1,Z]), home each axis independently, and 

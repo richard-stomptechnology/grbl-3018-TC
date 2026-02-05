@@ -70,9 +70,7 @@ typedef struct {
   #ifdef ENABLE_DUAL_AXIS
     uint8_t direction_bits_dual;
   #endif
-  #ifdef VARIABLE_SPINDLE
-    uint8_t is_pwm_rate_adjusted; // Tracks motions that require constant laser power/rate
-  #endif
+  // ...existing code...
 } st_block_t;
 static st_block_t st_block_buffer[SEGMENT_BUFFER_SIZE-1];
 
@@ -173,8 +171,7 @@ typedef struct {
   float decelerate_after; // Deceleration ramp start measured from end of block (mm)
 
   #ifdef VARIABLE_SPINDLE
-    float inv_rate;    // Used by PWM laser mode to speed up segment calculations.
-    uint8_t current_spindle_pwm; 
+    uint8_t current_spindle_pwm;
   #endif
 } st_prep_t;
 static st_prep_t prep;
@@ -394,7 +391,7 @@ ISR(TIMER1_COMPA_vect)
       st_go_idle();
       #ifdef VARIABLE_SPINDLE
         // Ensure pwm is set properly upon completion of rate-controlled motion.
-        if (st.exec_block->is_pwm_rate_adjusted) { spindle_set_speed(SPINDLE_PWM_OFF_VALUE); }
+        // [CNC-only fork, 2026-02-04] Laser mode code removed: always use normal spindle logic
       #endif
       system_set_exec_state_flag(EXEC_CYCLE_STOP); // Flag main program for cycle end
       return; // Nothing to do but exit.
@@ -737,16 +734,7 @@ void st_prep_buffer()
         }
         
         #ifdef VARIABLE_SPINDLE
-          // Setup laser mode variables. PWM rate adjusted motions will always complete a motion with the
-          // spindle off. 
-          st_prep_block->is_pwm_rate_adjusted = false;
-          if (settings.flags & BITFLAG_LASER_MODE) {
-            if (pl_block->condition & PL_COND_FLAG_SPINDLE_CCW) { 
-              // Pre-compute inverse programmed rate to speed up PWM updating per step segment.
-              prep.inv_rate = 1.0/pl_block->programmed_rate;
-              st_prep_block->is_pwm_rate_adjusted = true; 
-            }
-          }
+          // Always use normal spindle PWM
         #endif
       }
 
@@ -955,11 +943,11 @@ void st_prep_buffer()
         Compute spindle speed PWM output for step segment
       */
       
-      if (st_prep_block->is_pwm_rate_adjusted || (sys.step_control & STEP_CONTROL_UPDATE_SPINDLE_PWM)) {
+      if (sys.step_control & STEP_CONTROL_UPDATE_SPINDLE_PWM) {
         if (pl_block->condition & (PL_COND_FLAG_SPINDLE_CW | PL_COND_FLAG_SPINDLE_CCW)) {
           float rpm = pl_block->spindle_speed;
-          // NOTE: Feed and rapid overrides are independent of PWM value and do not alter laser power/rate.        
-          if (st_prep_block->is_pwm_rate_adjusted) { rpm *= (prep.current_speed * prep.inv_rate); }
+          // NOTE: Feed and rapid overrides are independent of PWM value.
+          // ...existing code...
           // If current_speed is zero, then may need to be rpm_min*(100/MAX_SPINDLE_SPEED_OVERRIDE)
           // but this would be instantaneous only and during a motion. May not matter at all.
           prep.current_spindle_pwm = spindle_compute_pwm_value(rpm);
@@ -1010,10 +998,9 @@ void st_prep_buffer()
     // typically very small and do not adversely effect performance, but ensures that Grbl
     // outputs the exact acceleration and velocity profiles as computed by the planner.
     dt += prep.dt_remainder; // Apply previous segment partial step execute time
-    float inv_rate = dt/(last_n_steps_remaining - step_dist_remaining); // Compute adjusted step rate inverse
-
     // Compute CPU cycles per step for the prepped segment.
-    uint32_t cycles = ceil( (TICKS_PER_MICROSECOND*1000000*60)*inv_rate ); // (cycles/step)
+    float step_rate = (last_n_steps_remaining - step_dist_remaining) / dt;
+    uint32_t cycles = ceil((TICKS_PER_MICROSECOND*1000000*60) / step_rate); // (cycles/step)
 
     #ifdef ADAPTIVE_MULTI_AXIS_STEP_SMOOTHING
       // Compute step timing and multi-axis smoothing level.
@@ -1053,7 +1040,7 @@ void st_prep_buffer()
     // Update the appropriate planner and segment data.
     pl_block->millimeters = mm_remaining;
     prep.steps_remaining = n_steps_remaining;
-    prep.dt_remainder = (n_steps_remaining - step_dist_remaining)*inv_rate;
+    // [CNC-only fork, 2026-02-04] Laser mode code removed: dt_remainder calculation simplified or not needed
 
     // Check for exit conditions and flag to load next planner block.
     if (mm_remaining == prep.mm_complete) {

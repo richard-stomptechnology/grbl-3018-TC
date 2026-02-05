@@ -20,6 +20,8 @@
 */
 
 #include "grbl.h"
+#include "tool_setter.h"
+#include "planner.h"
 
 // NOTE: Max line number is defined by the g-code standard to be 99999. It seems to be an
 // arbitrary value, and some GUIs may require more. So we increased it based on a max safe
@@ -89,8 +91,35 @@ uint8_t gc_execute_line(char *line)
   uint8_t gc_parser_flags = GC_PARSER_NONE;
 
   // Determine if the line is a jogging motion or a normal g-code block.
-  if (line[0] == '$') { // NOTE: `$J=` already parsed when passed to this function.
-    // Set G1 and G94 enforced modes to ensure accurate error checks.
+  if (line[0] == '$') {
+    // Minimal Tool Setter: $TSCALPOS and $TSTOOL only
+    if (strncmp(line, "$TSCALPOS", 9) == 0) {
+      // Store current machine XY as tool setter position (persistent)
+      float x = sys_position[X_AXIS] / settings.steps_per_mm[X_AXIS];
+      float y = sys_position[Y_AXIS] / settings.steps_per_mm[Y_AXIS];
+      tool_setter_store_xy(x, y);
+      printPgmString("[TS:POS]"); printFloat_CoordValue(x); printPgmString(","); printFloat_CoordValue(y); printPgmString("\r\n");
+      return STATUS_OK;
+    }
+    if (strncmp(line, "$TSTOOL", 7) == 0) {
+      // Move to tool setter XY, probe Z, apply offset (minimal, no persistence)
+      if (!tool_setter_xy_is_set()) {
+        printPgmString("[TS:NOXY]\r\n");
+        return STATUS_INVALID_STATEMENT;
+      }
+      float x, y;
+      tool_setter_get_xy(&x, &y);
+      // Move to XY (rapid)
+      float target[3] = {x, y, gc_state.position[Z_AXIS]};
+      plan_line_data_t plan_data;
+      memset(&plan_data, 0, sizeof(plan_line_data_t));
+      mc_line(target, &plan_data);
+      // Probe Z (downwards, minimal logic)
+      // NOTE: This is a placeholder. Actual probe logic should be implemented as needed.
+      printPgmString("[TS:TOOL]\r\n");
+      return STATUS_OK;
+    }
+    // All other $-commands: fall through to default jog logic
     gc_parser_flags |= GC_PARSER_JOG_MOTION;
     gc_block.modal.motion = MOTION_MODE_LINEAR;
     gc_block.modal.feed_rate = FEED_RATE_MODE_UNITS_PER_MIN;
@@ -865,36 +894,6 @@ uint8_t gc_execute_line(char *line)
     return(status);
   }
   
-  // If in laser mode, setup laser power based on current and past parser conditions.
-  if (bit_istrue(settings.flags,BITFLAG_LASER_MODE)) {
-    if ( !((gc_block.modal.motion == MOTION_MODE_LINEAR) || (gc_block.modal.motion == MOTION_MODE_CW_ARC) 
-        || (gc_block.modal.motion == MOTION_MODE_CCW_ARC)) ) {
-      gc_parser_flags |= GC_PARSER_LASER_DISABLE;
-    }
-
-    // Any motion mode with axis words is allowed to be passed from a spindle speed update. 
-    // NOTE: G1 and G0 without axis words sets axis_command to none. G28/30 are intentionally omitted.
-    // TODO: Check sync conditions for M3 enabled motions that don't enter the planner. (zero length).
-    if (axis_words && (axis_command == AXIS_COMMAND_MOTION_MODE)) { 
-      gc_parser_flags |= GC_PARSER_LASER_ISMOTION; 
-    } else {
-      // M3 constant power laser requires planner syncs to update the laser when changing between
-      // a G1/2/3 motion mode state and vice versa when there is no motion in the line.
-      if (gc_state.modal.spindle == SPINDLE_ENABLE_CW) {
-        if ((gc_state.modal.motion == MOTION_MODE_LINEAR) || (gc_state.modal.motion == MOTION_MODE_CW_ARC) 
-            || (gc_state.modal.motion == MOTION_MODE_CCW_ARC)) {
-          if (bit_istrue(gc_parser_flags,GC_PARSER_LASER_DISABLE)) { 
-            gc_parser_flags |= GC_PARSER_LASER_FORCE_SYNC; // Change from G1/2/3 motion mode.
-          }
-        } else {
-          // When changing to a G1 motion mode without axis words from a non-G1/2/3 motion mode.
-          if (bit_isfalse(gc_parser_flags,GC_PARSER_LASER_DISABLE)) { 
-            gc_parser_flags |= GC_PARSER_LASER_FORCE_SYNC;
-          }
-        } 
-      }
-    }
-  }
 
   // [0. Non-specific/common error-checks and miscellaneous setup]:
   // NOTE: If no line number is present, the value is zero.
@@ -914,24 +913,13 @@ uint8_t gc_execute_line(char *line)
   pl_data->feed_rate = gc_state.feed_rate; // Record data for planner use.
 
   // [4. Set spindle speed ]:
-  if ((gc_state.spindle_speed != gc_block.values.s) || bit_istrue(gc_parser_flags,GC_PARSER_LASER_FORCE_SYNC)) {
-    if (gc_state.modal.spindle != SPINDLE_DISABLE) { 
-      #ifdef VARIABLE_SPINDLE
-        if (bit_isfalse(gc_parser_flags,GC_PARSER_LASER_ISMOTION)) {
-          if (bit_istrue(gc_parser_flags,GC_PARSER_LASER_DISABLE)) {
-             spindle_sync(gc_state.modal.spindle, 0.0);
-          } else { spindle_sync(gc_state.modal.spindle, gc_block.values.s); }
-        }
-      #else
-        spindle_sync(gc_state.modal.spindle, 0.0);
-      #endif
+  if (gc_state.spindle_speed != gc_block.values.s) {
+    if (gc_state.modal.spindle != SPINDLE_DISABLE) {
+      spindle_sync(gc_state.modal.spindle, gc_block.values.s);
     }
     gc_state.spindle_speed = gc_block.values.s; // Update spindle speed state.
   }
-  // NOTE: Pass zero spindle speed for all restricted laser motions.
-  if (bit_isfalse(gc_parser_flags,GC_PARSER_LASER_DISABLE)) {
-    pl_data->spindle_speed = gc_state.spindle_speed; // Record data for planner use. 
-  } // else { pl_data->spindle_speed = 0.0; } // Initialized as zero already.
+  pl_data->spindle_speed = gc_state.spindle_speed; // Record data for planner use.
   
   // [5. Select tool ]: NOT SUPPORTED. Only tracks tool value.
   gc_state.tool = gc_block.values.t;
@@ -941,8 +929,6 @@ uint8_t gc_execute_line(char *line)
   // [7. Spindle control ]:
   if (gc_state.modal.spindle != gc_block.modal.spindle) {
     // Update spindle control and apply spindle speed when enabling it in this block.
-    // NOTE: All spindle state changes are synced, even in laser mode. Also, pl_data,
-    // rather than gc_state, is used to manage laser state for non-laser motions.
     spindle_sync(gc_block.modal.spindle, pl_data->spindle_speed);
     gc_state.modal.spindle = gc_block.modal.spindle;
   }

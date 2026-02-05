@@ -534,9 +534,7 @@ static void protocol_exec_rt_suspend()
       restore_spindle_speed = block->spindle_speed;
     }
     #ifdef DISABLE_LASER_DURING_HOLD
-      if (bit_istrue(settings.flags,BITFLAG_LASER_MODE)) { 
-        system_set_exec_accessory_override_flag(EXEC_SPINDLE_OVR_STOP);
-      }
+      // [CNC-only fork, 2026-02-04] Laser mode code removed: always allow spindle override
     #endif
   #else
     if (block == NULL) { restore_condition = (gc_state.modal.spindle | gc_state.modal.coolant); }
@@ -576,18 +574,10 @@ static void protocol_exec_rt_suspend()
             }
 
             // Execute slow pull-out parking retract motion. Parking requires homing enabled, the
-            // current location not exceeding the parking target location, and laser mode disabled.
+            // [CNC-only fork, 2026-02-04] Laser mode code removed: always allow parking retract if homing enabled and position valid.
             // NOTE: State is will remain DOOR, until the de-energizing and retract is complete.
-            #ifdef ENABLE_PARKING_OVERRIDE_CONTROL
             if ((bit_istrue(settings.flags,BITFLAG_HOMING_ENABLE)) &&
-                            (parking_target[PARKING_AXIS] < PARKING_TARGET) &&
-                            bit_isfalse(settings.flags,BITFLAG_LASER_MODE) &&
-                            (sys.override_ctrl == OVERRIDE_PARKING_MOTION)) {
-            #else
-            if ((bit_istrue(settings.flags,BITFLAG_HOMING_ENABLE)) &&
-                            (parking_target[PARKING_AXIS] < PARKING_TARGET) &&
-                            bit_isfalse(settings.flags,BITFLAG_LASER_MODE)) {
-            #endif
+              (parking_target[PARKING_AXIS] < PARKING_TARGET)) {
               // Retract spindle by pullout distance. Ensure retraction motion moves away from
               // the workpiece and waypoint motion doesn't exceed the parking target location.
               if (parking_target[PARKING_AXIS] < retract_waypoint) {
@@ -614,7 +604,6 @@ static void protocol_exec_rt_suspend()
             } else {
 
               // Parking motion not possible. Just disable the spindle and coolant.
-              // NOTE: Laser mode does not start a parking motion to ensure the laser stops immediately.
               spindle_set_state(SPINDLE_DISABLE,0.0); // De-energize
               coolant_set_state(COOLANT_DISABLE);     // De-energize
 
@@ -651,12 +640,7 @@ static void protocol_exec_rt_suspend()
             #ifdef PARKING_ENABLE
               // Execute fast restore motion to the pull-out position. Parking requires homing enabled.
               // NOTE: State is will remain DOOR, until the de-energizing and retract is complete.
-              #ifdef ENABLE_PARKING_OVERRIDE_CONTROL
-              if (((settings.flags & (BITFLAG_HOMING_ENABLE|BITFLAG_LASER_MODE)) == BITFLAG_HOMING_ENABLE) &&
-                   (sys.override_ctrl == OVERRIDE_PARKING_MOTION)) {
-              #else
-              if ((settings.flags & (BITFLAG_HOMING_ENABLE|BITFLAG_LASER_MODE)) == BITFLAG_HOMING_ENABLE) {
-              #endif
+                  if ((settings.flags & BITFLAG_HOMING_ENABLE) == BITFLAG_HOMING_ENABLE) {
                 // Check to ensure the motion doesn't move below pull-out position.
                 if (parking_target[PARKING_AXIS] <= PARKING_TARGET) {
                   parking_target[PARKING_AXIS] = retract_waypoint;
@@ -670,19 +654,13 @@ static void protocol_exec_rt_suspend()
             if (gc_state.modal.spindle != SPINDLE_DISABLE) {
               // Block if safety door re-opened during prior restore actions.
               if (bit_isfalse(sys.suspend,SUSPEND_RESTART_RETRACT)) {
-                if (bit_istrue(settings.flags,BITFLAG_LASER_MODE)) {
-                  // When in laser mode, ignore spindle spin-up delay. Set to turn on laser when cycle starts.
-                  bit_true(sys.step_control, STEP_CONTROL_UPDATE_SPINDLE_PWM);
-                } else {
-                  spindle_set_state((restore_condition & (PL_COND_FLAG_SPINDLE_CW | PL_COND_FLAG_SPINDLE_CCW)), restore_spindle_speed);
-                  delay_sec(SAFETY_DOOR_SPINDLE_DELAY, DELAY_MODE_SYS_SUSPEND);
-                }
+                spindle_set_state((restore_condition & (PL_COND_FLAG_SPINDLE_CW | PL_COND_FLAG_SPINDLE_CCW)), restore_spindle_speed);
+                delay_sec(SAFETY_DOOR_SPINDLE_DELAY, DELAY_MODE_SYS_SUSPEND);
               }
             }
             if (gc_state.modal.coolant != COOLANT_DISABLE) {
               // Block if safety door re-opened during prior restore actions.
               if (bit_isfalse(sys.suspend,SUSPEND_RESTART_RETRACT)) {
-                // NOTE: Laser mode will honor this delay. An exhaust system is often controlled by this pin.
                 coolant_set_state((restore_condition & (PL_COND_FLAG_COOLANT_FLOOD | PL_COND_FLAG_COOLANT_MIST)));
                 delay_sec(SAFETY_DOOR_COOLANT_DELAY, DELAY_MODE_SYS_SUSPEND);
               }
@@ -690,12 +668,7 @@ static void protocol_exec_rt_suspend()
 
             #ifdef PARKING_ENABLE
               // Execute slow plunge motion from pull-out position to resume position.
-              #ifdef ENABLE_PARKING_OVERRIDE_CONTROL
-              if (((settings.flags & (BITFLAG_HOMING_ENABLE|BITFLAG_LASER_MODE)) == BITFLAG_HOMING_ENABLE) &&
-                   (sys.override_ctrl == OVERRIDE_PARKING_MOTION)) {
-              #else
-              if ((settings.flags & (BITFLAG_HOMING_ENABLE|BITFLAG_LASER_MODE)) == BITFLAG_HOMING_ENABLE) {
-              #endif
+                  if ((settings.flags & BITFLAG_HOMING_ENABLE) == BITFLAG_HOMING_ENABLE) {
                 // Block if safety door re-opened during prior restore actions.
                 if (bit_isfalse(sys.suspend,SUSPEND_RESTART_RETRACT)) {
                   // Regardless if the retract parking motion was a valid/safe motion or not, the
@@ -735,12 +708,7 @@ static void protocol_exec_rt_suspend()
           } else if (sys.spindle_stop_ovr & (SPINDLE_STOP_OVR_RESTORE | SPINDLE_STOP_OVR_RESTORE_CYCLE)) {
             if (gc_state.modal.spindle != SPINDLE_DISABLE) {
               report_feedback_message(MESSAGE_SPINDLE_RESTORE);
-              if (bit_istrue(settings.flags,BITFLAG_LASER_MODE)) {
-                // When in laser mode, ignore spindle spin-up delay. Set to turn on laser when cycle starts.
-                bit_true(sys.step_control, STEP_CONTROL_UPDATE_SPINDLE_PWM);
-              } else {
-                spindle_set_state((restore_condition & (PL_COND_FLAG_SPINDLE_CW | PL_COND_FLAG_SPINDLE_CCW)), restore_spindle_speed);
-              }
+              spindle_set_state((restore_condition & (PL_COND_FLAG_SPINDLE_CW | PL_COND_FLAG_SPINDLE_CCW)), restore_spindle_speed);
             }
             if (sys.spindle_stop_ovr & SPINDLE_STOP_OVR_RESTORE_CYCLE) {
               system_set_exec_state_flag(EXEC_CYCLE_START);  // Set to resume program.
